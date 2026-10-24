@@ -8,7 +8,7 @@ const path = require('node:path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 
-// Settings from server/.env (Node 20.12+); real environment variables (Docker, hosting panels) win.
+// Settings from backend/.env (Node 20.12+); real environment variables (Docker, hosting panels) win.
 try { process.loadEnvFile(path.join(__dirname, '.env')); } catch { /* no .env file — fine */ }
 
 // SKIP_SEED=true: a real deployment — don't create or wipe demo data. The default admin
@@ -37,7 +37,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/activity', require('./routes/activity'));
 
-const FRONTEND_DIR = path.join(__dirname, '..');
+const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
 app.use(express.static(FRONTEND_DIR));
 
 // Catches multer's file-type/size-limit errors (and anything else thrown in

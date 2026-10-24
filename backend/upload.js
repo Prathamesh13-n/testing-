@@ -1,9 +1,9 @@
 /* ============================================================
    CDAD server :: upload.js
    Multer config for the Submission tab's file attachment (PDF,
-   PPT/PPTX, CSV, DOC/DOCX). Files land under server/data/uploads —
+   PPT/PPTX, CSV, DOC/DOCX). Files land under backend/data/uploads —
    the same directory the SQLite file lives in, so the existing
-   Docker volume (-v cdad-data:/app/server/data) already covers
+   Docker volume (-v cdad-data:/app/backend/data) already covers
    persistence here with no extra config.
    ============================================================ */
 const path = require('node:path');

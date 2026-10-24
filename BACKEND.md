@@ -19,18 +19,18 @@ class, so this branch adds a proper backend.
 
 ## What changed
 
-- **New `server/` folder**: a Node/Express app with a SQLite database
-  (`server/db.js`), one route file per resource (`server/routes/*.js`), a
-  seed script (`server/seed.js`) with the same demo roster as before, and
-  session-cookie-based auth (`server/sessions.js`) with bcrypt-hashed
+- **New `backend/` folder**: a Node/Express app with a SQLite database
+  (`backend/db.js`), one route file per resource (`backend/routes/*.js`), a
+  seed script (`backend/seed.js`) with the same demo roster as before, and
+  session-cookie-based auth (`backend/sessions.js`) with bcrypt-hashed
   passwords.
 - **Every frontend JS file was updated** to call the new API instead of
-  `localStorage` — but the six helper function names in `js/storage.js`
+  `localStorage` — but the six helper function names in `frontend/js/storage.js`
   (`getData`, `addData`, `updateData`, `deleteData`, `findData`, `saveData`)
   stayed the same, so the overall structure of the app didn't change, just
   how it talks to the data layer.
-- **`js/data.js` is gone** — seeding now happens server-side once, in
-  `server/seed.js`, instead of re-running in every browser tab.
+- **`frontend/js/data.js` is gone** — seeding now happens server-side once, in
+  `backend/seed.js`, instead of re-running in every browser tab.
 - **Live updates are now polling-based** (every 15 seconds, and
   immediately when you switch back to the tab) instead of the old
   same-browser-only LocalStorage event. A change someone else makes may
@@ -44,7 +44,7 @@ class, so this branch adds a proper backend.
   minutes. No email setup is needed.
 - **New: file attachments on the Submission tab.** Students can now
   attach a PDF, PPT/PPTX, CSV, or DOC/DOCX file (max 10MB) alongside or
-  instead of a link. Files live under `server/data/uploads/` — already
+  instead of a link. Files live under `backend/data/uploads/` — already
   covered by the existing Docker volume, no extra setup needed. Faculty
   can download the attached file from the Review modal or the
   Submissions Hub.
@@ -90,7 +90,7 @@ question entirely — the container always uses the right version.
 ```bash
 docker build -t cdad .
 docker volume create cdad-data
-docker run -d -p 3000:3000 -v cdad-data:/app/server/data --name cdad-container cdad
+docker run -d -p 3000:3000 -v cdad-data:/app/backend/data --name cdad-container cdad
 ```
 
 Open **http://localhost:3000**.
@@ -113,7 +113,7 @@ If it's below `v22.5.0`, either install a newer Node or use Docker instead
 (Option A) — the backend won't start otherwise.
 
 ```bash
-cd server
+cd backend
 npm install
 npm start
 ```
@@ -151,14 +151,14 @@ type the captcha shown, then choose a new password.
 ## Backend reference for contributors
 
 Stack: Node 22+/Express, SQLite via `node:sqlite`, bcrypt, cookie sessions,
-multer for uploads. Entry point `server/index.js` mounts one router per
-resource under `/api/*` and serves the static frontend from the project root.
+multer for uploads. Entry point `backend/index.js` mounts one router per
+resource under `/api/*` and serves the static frontend from `frontend/`.
 
 ### Roles and sessions
 - Three roles: `student`, `faculty`, `admin`. Login is `POST /api/auth/login`
   with `{ role, id, password }`; the server sets an HttpOnly `cdad_sid` cookie.
   Sessions live **in memory** (a restart logs everyone out).
-- `requireRole(role)` in `server/sessions.js` guards routes.
+- `requireRole(role)` in `backend/sessions.js` guards routes.
   `requireRole()` = any logged-in user, `requireRole('faculty')` = faculty **or
   admin**, `requireRole('admin')` = admin only, `requireRole('student')` = students.
 - Handlers that branch on the caller treat admin like faculty
@@ -200,7 +200,7 @@ database upgrades in place — no reset needed.
 | `DELETE /api/students` | faculty/admin | Delete all students (detaches `submissions.submitted_by_id` first, otherwise a foreign key blocks it) |
 
 Exam names are fixed in `routes/examSubmissions.js` (`EXAMS = ['TA1','TA2','EndSem']`).
-Uploads are stored in `server/data/uploads/` (allowed types/size in `upload.js`).
+Uploads are stored in `backend/data/uploads/` (allowed types/size in `upload.js`).
 
 ### Rules the server enforces (don't rely on the UI)
 - Deadline and team-leader checks run in middleware **before** multer, so a
@@ -209,19 +209,19 @@ Uploads are stored in `server/data/uploads/` (allowed types/size in `upload.js`)
 - File downloads check group membership for students.
 
 ### Frontend map
-`js/examSubmissions.js` (API helpers + preview modal), `js/marks.js` (marks API
-helpers), `js/admin.js` + `admin.html` (admin panel). Faculty UI lives in
-`js/faculty.js`, student UI in `js/student.js`; the faculty dashboard also
+`frontend/js/examSubmissions.js` (API helpers + preview modal), `frontend/js/marks.js` (marks API
+helpers), `frontend/js/admin.js` + `frontend/admin.html` (admin panel). Faculty UI lives in
+`frontend/js/faculty.js`, student UI in `frontend/js/student.js`; the faculty dashboard also
 loads for admins (`currentFacultyRecord()` accepts both roles).
 
 ### Running a safe test
 Copy the project folder, start the copy on another port
-(`PORT=3200 node server/index.js`) and test against that — the SQLite file in
-`server/data/` is the live data. Back it up (`cdad.db*`) before destructive actions.
+(`PORT=3200 node backend/index.js`) and test against that — the SQLite file in
+`backend/data/` is the live data. Back it up (`cdad.db*`) before destructive actions.
 
-### File storage (`server/fileStore.js`)
+### File storage (`backend/fileStore.js`)
 Uploaded files go through one module with two backends: local disk
-(`server/data/uploads/`, the default) or **Appwrite Storage** when
+(`backend/data/uploads/`, the default) or **Appwrite Storage** when
 `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_API_KEY` and
 `APPWRITE_BUCKET_ID` are all set. multer still writes to disk first;
 `persistUploads` (middleware after multer) then uploads to Appwrite and replaces

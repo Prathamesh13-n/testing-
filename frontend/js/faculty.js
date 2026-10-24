@@ -104,7 +104,7 @@ async function exportStudentsCsv() {
 
 /** Wipes every student record. Groups' member lists/leaders fall out
     automatically (students.group_id disappears with the row; the
-    team_leader_id FK is ON DELETE SET NULL) — see server/db.js. */
+    team_leader_id FK is ON DELETE SET NULL) — see backend/db.js. */
 async function confirmDeleteAllStudents() {
   const students = await getData(CDAD_KEYS.STUDENTS);
   const count = students.length;
@@ -157,4 +157,3 @@ async function renderTopbar() {
   const sideBadge = document.getElementById('sidebarNotifBadge');
   if (sideBadge) { sideBadge.textContent = count; sideBadge.style.display = count > 0 ? 'inline-flex' : 'none'; }
 }
-

@@ -126,7 +126,7 @@ function requireTeamLeader(req, res, next) {
 
 /** Submission accepts multipart/form-data: `link`, `note` (both optional)
     plus an optional `file` (PDF/PPT/PPTX/CSV/DOC/DOCX, max 10MB) — see
-    server/upload.js. At least one of link or file (new or already on
+    backend/upload.js. At least one of link or file (new or already on
     record) is required; a resubmission that omits a new file keeps
     whatever file was already attached. */
 router.post('/:id/submission', requireRole('student'), requireTeamLeader, upload.single('file'), persistUploads, (req, res) => {

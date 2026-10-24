@@ -6,7 +6,7 @@
    ============================================================ */
 
 /* ---------- Activity log ----------
-   Every mutating API route logs itself server-side now (see server/db.js's
+   Every mutating API route logs itself server-side now (see backend/db.js's
    logActivity + each routes/*.js file) — the frontend no longer writes log
    entries directly, it only ever reads/clears the log faculty.js shows. */
 async function clearActivityLog() {

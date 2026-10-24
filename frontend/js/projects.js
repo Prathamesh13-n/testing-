@@ -2,7 +2,7 @@
    CDAD :: projects.js
    Thin wrappers over /api/projects. Progress derivation, group
    progress mirroring, notification creation and activity logging
-   all happen server-side now (see server/routes/projects.js).
+   all happen server-side now (see backend/routes/projects.js).
    ============================================================ */
 
 async function allProjects() {

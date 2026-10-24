@@ -6,17 +6,15 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY server/package*.json ./server/
-RUN cd server && npm ci --omit=dev
+COPY backend/package*.json ./backend/
+RUN cd backend && npm ci --omit=dev
 
-COPY server/ ./server/
-COPY index.html student.html faculty.html admin.html group-details.html favicon.svg ./
-COPY css/ ./css/
-COPY js/ ./js/
+COPY backend/ ./backend/
+COPY frontend/ ./frontend/
 
 EXPOSE 3000
 
 ENV NODE_ENV=production
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD wget -qO- http://localhost:${PORT:-3000}/api/auth/me || exit 1
 
-CMD ["node", "server/index.js"]
+CMD ["node", "backend/index.js"]

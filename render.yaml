@@ -9,7 +9,7 @@ services:
     healthCheckPath: /api/auth/me
     disk:
       name: cdad-data
-      mountPath: /app/server/data
+      mountPath: /app/backend/data
       sizeGB: 1
     envVars:
       - key: SKIP_SEED          # real deployment: no demo accounts (ADMIN001 still exists)

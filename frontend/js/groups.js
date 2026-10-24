@@ -3,7 +3,7 @@
    Thin wrappers over /api/groups + /api/group-join-requests.
    Membership sync, leader reassignment, progress mirroring,
    notification creation and activity logging all happen
-   server-side now (see server/routes/groups.js and groupOps.js).
+   server-side now (see backend/routes/groups.js and groupOps.js).
    ============================================================ */
 
 async function allGroups() {

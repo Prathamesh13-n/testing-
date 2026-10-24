@@ -21,7 +21,7 @@ docker compose up -d --build    # update after `git pull`
 docker compose down             # stop; data stays in the cdad-data volume
 ```
 
-Everything lives in the `cdad-data` volume (`/app/server/data`): the SQLite
+Everything lives in the `cdad-data` volume (`/app/backend/data`): the SQLite
 database and, unless you use Appwrite, the uploaded files. **Back it up**:
 
 ```bash
@@ -51,7 +51,7 @@ Never commit `.env` (it is gitignored).
 
 > Without `SKIP_SEED`, the first start fills the database with demo data and
 > demo logins (`FAC001`/`faculty123`, students/`PASS123`). Fine for a demo,
-> not for real use. Note that changing `SEED_VERSION` in `server/seed.js`
+> not for real use. Note that changing `SEED_VERSION` in `backend/seed.js`
 > **wipes** the data tables on the next start of a server that isn't using
 > `SKIP_SEED`.
 
@@ -118,7 +118,7 @@ Notes:
 
 Important:
 - **Use a paid instance (`starter` or above).** The database is a SQLite file on the
-  persistent disk (`/app/server/data`), and Render only offers disks on paid instances.
+  persistent disk (`/app/backend/data`), and Render only offers disks on paid instances.
   A free instance has no disk — data would be wiped on every restart.
 - Only **one** instance: SQLite and in-memory sessions don't work across several. Don't scale out.
 - Each deploy restarts the app, which logs everyone out (sessions are in memory).
@@ -127,5 +127,5 @@ Important:
 - For a custom domain, add it in the Render dashboard; HTTPS is automatic.
 
 **Railway / Fly.io** work the same way: build from the `Dockerfile`, attach a volume
-mounted at `/app/server/data`, run a single instance, and set the same environment
+mounted at `/app/backend/data`, run a single instance, and set the same environment
 variables (`SKIP_SEED`, `COOKIE_SECURE`, `TRUST_PROXY`, `APPWRITE_*`).

@@ -1,4 +1,37 @@
-node_modules/
-server/data/
+# Dependencies
+**/node_modules/
+
+# Local secrets and environment files
 .env
-server/.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local database and uploaded files
+backend/data/
+
+# Virtual environments and Python caches
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated output and caches
+.cache/
+coverage/
+dist/
+build/
+*.tsbuildinfo
+*.log
+npm-debug.log*
+
+# Operating system files
+.DS_Store
+Thumbs.db

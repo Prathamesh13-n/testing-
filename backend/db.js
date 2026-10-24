@@ -1,7 +1,7 @@
 /* ============================================================
    CDAD server :: db.js
    SQLite schema (via Node's built-in node:sqlite) + small helpers
-   ported from the frontend's js/common.js / js/storage.js.
+   ported from frontend/js/common.js and frontend/js/storage.js.
    ============================================================ */
 const path = require('node:path');
 const fs = require('node:fs');

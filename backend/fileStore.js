@@ -2,7 +2,7 @@
    CDAD server :: fileStore.js
    Where uploaded submission files live. Two backends behind one API:
 
-   - local disk  (default)  -> server/data/uploads/, stored ref = the file name
+   - local disk  (default)  -> backend/data/uploads/, stored ref = the file name
    - Appwrite Storage       -> used when all four APPWRITE_* variables are set,
                                stored ref = "appwrite:<fileId>"
 
@@ -10,7 +10,7 @@
    Appwrite was switched on keep working: send()/remove() look at the ref's
    prefix, not at the current setting.
 
-   Env (server/.env, or real environment variables in Docker):
+   Env (backend/.env, or real environment variables in Docker):
      APPWRITE_ENDPOINT    e.g. https://appwrite.example.com/v1
      APPWRITE_PROJECT_ID
      APPWRITE_API_KEY     server key with the "files.read" and "files.write" scopes
@@ -21,7 +21,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 
-// Plain `node index.js` has no dotenv any more: load server/.env ourselves (Node 20.12+).
+// Plain `node index.js` has no dotenv any more: load backend/.env ourselves (Node 20.12+).
 try { process.loadEnvFile(path.join(__dirname, '.env')); } catch { /* no .env file — fine */ }
 
 const UPLOAD_DIR = path.join(process.env.CDAD_DATA_DIR || path.join(__dirname, 'data'), 'uploads');
