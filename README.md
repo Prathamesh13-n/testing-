@@ -19,7 +19,7 @@ in plaintext.
 ## Tech Stack
 
 - HTML5, CSS3, Vanilla JavaScript on the frontend (no frameworks, no build step)
-- Node.js + Express REST API (`server/`)
+- Node.js + Express REST API (`backend/`)
 - SQLite (via Node's built-in `node:sqlite`) as the only data store — requires Node 22+ (the Dockerfile uses `node:22-alpine`)
 - `bcryptjs` for password hashing, HttpOnly session cookies for auth
 - Docker (single Node container, no separate reverse proxy needed)
@@ -29,12 +29,12 @@ in plaintext.
 ```bash
 docker build -t cdad .
 docker volume create cdad-data
-docker run -d -p 3000:3000 -v cdad-data:/app/server/data --name cdad-container cdad
+docker run -d -p 3000:3000 -v cdad-data:/app/backend/data --name cdad-container cdad
 ```
 
 Open **http://localhost:3000**
 
-The `-v cdad-data:/app/server/data` volume is what makes the SQLite database
+The `-v cdad-data:/app/backend/data` volume is what makes the SQLite database
 survive beyond the container itself — without it, removing the container
 (`docker rm`, not just `docker stop`) wipes all data and the next run starts
 from a fresh seed. With the volume, `docker rm` + `docker run` again reuses
@@ -56,16 +56,16 @@ docker volume rm cdad-data
 ## Quick Start (no Docker)
 
 ```bash
-cd server
+cd backend
 npm install
 npm start
 ```
 
 Open **http://localhost:3000** (or set `PORT=...` before `npm start` to use a
-different port). The server seeds demo data into `server/data/cdad.db`
+different port). The server seeds demo data into `backend/data/cdad.db`
 automatically on first run.
 
-> Run the app through this Node/Express server. Opening `index.html` directly
+> Run the app through this Node/Express server. Opening `frontend/index.html` directly
 > or using VS Code Live Server serves only the frontend, so `/api/*` requests
 > such as login and the current-session check will return 404.
 
@@ -80,7 +80,7 @@ for reference only.
 | Faculty | `FAC001`         | `faculty123` |
 | Student | Enrollment No. (e.g. `ADT24SOCB0001`) | `PASS123` (default) |
 
-> The default admin is created automatically on first run (`server/db.js`).
+> The default admin is created automatically on first run (`backend/db.js`).
 > **Change its password** (Admin Panel → 🔑 Change Password) before sharing the app — admin passwords can't be
 > reset from the login page.
 
@@ -249,15 +249,15 @@ The app walks a brand-new student through setup automatically:
 ## Tests
 
 ```bash
-cd server
+cd backend
 npm test
 ```
 
-Runs the API smoke tests in `server/test/` (Node's built-in test runner, Node 22.5+). They boot the real server on a random port with a temporary data directory (`CDAD_DATA_DIR`), so your live `server/data/` is never touched. Covered: login per role, 401s, role boundaries, uploads (type/size/team-leader rules), review validation, mark release, exam deadlines, captcha, logout.
+Runs the API smoke tests in `backend/test/` (Node's built-in test runner, Node 22.5+). They boot the real server on a random port with a temporary data directory (`CDAD_DATA_DIR`), so your live `backend/data/` is never touched. Covered: login per role, 401s, role boundaries, uploads (type/size/team-leader rules), review validation, mark release, exam deadlines, captcha, logout.
 
 ## Database
 
-SQLite tables (`server/db.js`): `admins`, `faculty`, `students`
+SQLite tables (`backend/db.js`): `admins`, `faculty`, `students`
 (has `section`), `student_groups`, `projects`, `submissions`, `marks`
 (has `released`), `exam_submissions`, `exam_submission_files`,
 `exam_deadlines`, `presentations`, `requests`,
@@ -268,66 +268,41 @@ membership is `students.group_id`, not a `members[]` array kept in sync by
 hand; group progress is read live off the linked project, never stored
 independently.
 
-The REST API (`server/routes/*.js`) reconstructs the same JSON shapes the
+The REST API (`backend/routes/*.js`) reconstructs the same JSON shapes the
 frontend has always used (`group.members`, `project.progress`, etc.) from
-these normalized tables via joins, so `js/storage.js`'s six helpers
+these normalized tables via joins, so `frontend/js/storage.js`'s six helpers
 (`getData`, `saveData`, `addData`, `updateData`, `deleteData`, `findData`)
 still look the same to every other frontend file — they just `fetch()` the
 API now instead of reading `localStorage`.
 
 ## File Structure
-```
-CDAD/
-│
-├── index.html
-├── student.html
-├── faculty.html
-├── admin.html
-├── group-details.html
+
+```text
+CBAD-project/
+├── .dockerignore
+├── .env.example
+├── .gitignore
+├── BACKEND.md
+├── DEPLOY.md
 ├── Dockerfile
 ├── README.md
-│
-├── css/
-│   ├── style.css
-│   ├── dashboard.css
-│   ├── forms.css
-│   └── responsive.css
-│
-├── js/
-│   ├── storage.js
-│   ├── common.js
-│   ├── auth.js
-│   ├── groups.js
-│   ├── projects.js
-│   ├── marks.js
-│   ├── examSubmissions.js
-│   ├── admin.js
-│   ├── presentations.js
-│   ├── requests.js
-│   ├── notifications.js
-│   ├── announcements.js
-│   ├── student.js
-│   └── faculty.js
-│
-├── assets/
-│   ├── images/
-│   └── icons/
-│
-└── server/
-    ├── index.js          (Express app + static file serving)
-    ├── db.js              (SQLite schema + helpers)
-    ├── seed.js            (demo data, version-gated)
-    ├── sessions.js        (cookie sessions + requireRole middleware)
-    ├── serializers.js     (DB row -> frontend JSON shape)
-    ├── notify.js           (server-side notification creation)
-    ├── groupOps.js        (shared group-membership operations)
-    ├── data/cdad.db       (SQLite file, created on first run — gitignored)
-    └── routes/
-        ├── auth.js, students.js, faculty.js, admin.js, groups.js,
-        ├── groupJoinRequests.js, projects.js, marks.js, examSubmissions.js,
-        └── presentations.js, requests.js, peerRequests.js, notifications.js,
-            announcements.js, activity.js
+├── docker-compose.yml
+├── render.yaml
+├── frontend/
+│   ├── admin.html, faculty.html, group-details.html, index.html, student.html
+│   ├── favicon.svg
+│   ├── css/
+│   └── js/
+└── backend/
+    ├── package.json, package-lock.json
+    ├── index.js, db.js, seed.js, sessions.js, and other server modules
+    ├── routes/
+    ├── test/
+    └── data/ (local database and uploads; gitignored)
 ```
+
+The frontend is static HTML/CSS/JavaScript with no separate build step. The
+backend serves it and the `/api/*` endpoints from the same origin.
 
 To put it online with Docker (and optionally keep uploaded files in Appwrite),
 see [DEPLOY.md](DEPLOY.md).
@@ -337,15 +312,15 @@ is in [BACKEND.md](BACKEND.md#backend-reference-for-contributors).
 
 ## Resetting the Demo Data
 
-The seed re-runs automatically whenever `SEED_VERSION` in `server/seed.js` is
+The seed re-runs automatically whenever `SEED_VERSION` in `backend/seed.js` is
 bumped to a new string — this is how roster changes propagate to everyone
 without needing a manual reset.
 
 **Without Docker** — stop the server and delete the database file:
 
 ```bash
-rm server/data/cdad.db server/data/cdad.db-shm server/data/cdad.db-wal
-npm --prefix server start
+rm backend/data/cdad.db backend/data/cdad.db-shm backend/data/cdad.db-wal
+npm --prefix backend start
 ```
 
 **With Docker** — remove the volume instead (the file lives inside it, not
@@ -354,5 +329,7 @@ on the host):
 ```bash
 docker rm -f cdad-container
 docker volume rm cdad-data
-docker run -d -p 3000:3000 -v cdad-data:/app/server/data --name cdad-container cdad
+docker run -d -p 3000:3000 -v cdad-data:/app/backend/data --name cdad-container cdad
 ```
+#   t e s t i n g -  
+ 
