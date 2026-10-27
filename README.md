@@ -1,499 +1,334 @@
-# SmartResumeAI — Project Guide
+# CDAD — College Digital Academic Dashboard
 
-> **Build smarter resumes. Match better jobs. Get interview-ready.**
+A fully editable academic dashboard for managing students, groups, projects,
+marks, presentations, and submissions. A Node/Express REST API backed by
+SQLite is the single source of truth — every student and faculty session
+reads and writes the same server-side data, so an edit made on the Faculty
+Dashboard is immediately visible on the Student Dashboard (and vice versa
+where students are allowed to edit their own data), across devices, not just
+across browser tabs. Sessions are server-side, authenticated via an
+HttpOnly cookie, and passwords are bcrypt-hashed — never stored or compared
+in plaintext.
 
-SmartResumeAI is a full-stack resume workspace for writing resumes, reviewing resume content, and comparing a resume with a specific job posting. It is built as a major-project learning application with a transparent, testable ATS-style estimate—not an integration with or score from a commercial Applicant Tracking System (ATS).
+> **Note on "live" updates:** the frontend polls the server every 15 seconds
+> (and immediately on tab focus) rather than pushing updates over a
+> WebSocket, so a change made by someone else may take a few seconds to
+> appear — this was a deliberate simplicity tradeoff for a project at this
+> scale.
 
-## Table of contents
+## Tech Stack
 
-- [Project at a glance](#project-at-a-glance)
-- [What the application does](#what-the-application-does)
-- [Technology](#technology)
-- [Requirements](#requirements)
-- [Quick start on Windows](#quick-start-on-windows)
-- [Environment configuration](#environment-configuration)
-- [First run checklist](#first-run-checklist)
-- [How to use the application](#how-to-use-the-application)
-- [How the ATS-style estimate works](#how-the-ats-style-estimate-works)
-- [Backend API reference](#backend-api-reference)
-- [Project structure](#project-structure)
-- [Database and migrations](#database-and-migrations)
-- [Tests and quality checks](#tests-and-quality-checks)
-- [Security and privacy](#security-and-privacy)
-- [Troubleshooting](#troubleshooting)
-- [Known limitations and roadmap](#known-limitations-and-roadmap)
-- [More manuals](#more-manuals)
+- HTML5, CSS3, Vanilla JavaScript on the frontend (no frameworks, no build step)
+- Node.js + Express REST API (`backend/`)
+- SQLite (via Node's built-in `node:sqlite`) as the only data store — requires Node 22+ (the Dockerfile uses `node:22-alpine`)
+- `bcryptjs` for password hashing, HttpOnly session cookies for auth
+- Docker (single Node container, no separate reverse proxy needed)
 
-## Project at a glance
+## Quick Start (Docker)
 
-| Item | Details |
-|---|---|
-| Audience | Students, recent graduates, job seekers, and professionals |
-| Frontend | React, Vite, Tailwind CSS v4, React Router |
-| API | Python, FastAPI, Pydantic |
-| Database | SQLite locally; PostgreSQL supported through SQLAlchemy |
-| ORM and migrations | SQLAlchemy and Alembic |
-| Resume formats | PDF and DOCX text extraction |
-| AI provider | Google Gemini, optional and called from the backend only |
-| Authentication | Argon2 password hashes and signed bearer JWTs |
-| Local frontend | `http://localhost:5173` |
-| Local API | `http://127.0.0.1:8000` |
-| API reference | `http://127.0.0.1:8000/docs` |
-
-## What the application does
-
-- Registers and signs in users, protects workspace screens, and keeps resume data scoped to its owner.
-- Lets users create, edit, save, and delete resume drafts.
-- Parses PDF and DOCX documents in memory and shows extracted text for review.
-- Scores visible resume sections with a rule-based 100-point checklist.
-- Compares a saved resume with a pasted job description using an explainable ATS-style rubric.
-- Offers AI rewrite suggestions if a Gemini key is configured; the user reviews and accepts, edits, or rejects them.
-- Shows saved resumes and analysis history in the dashboard and history screen.
-- Previews resumes using two layouts and offers browser print-to-PDF.
-
-Scores are guidance for users and a demonstrable project feature. They are not hiring predictions, proof of qualifications, or official vendor scores.
-
-## Technology
-
-### Frontend
-
-- React and React Router
-- Vite development server and production bundler
-- Tailwind CSS v4 via `@tailwindcss/vite`
-- Inter variable font
-- Browser Fetch API for backend requests
-
-### Backend
-
-- FastAPI and Pydantic v2
-- SQLAlchemy ORM and Alembic migrations
-- SQLite for a no-service local setup; PostgreSQL via Psycopg for deployments
-- Argon2 password hashing and `python-jose` JWT signing
-- PyMuPDF for PDF extraction and `python-docx` for DOCX extraction
-- Google Gen AI Python SDK for optional Gemini text rewriting
-- Pytest and FastAPI's test client
-
-## Requirements
-
-The current project has been verified in this workspace with **Python 3.14.6**, **Node.js 24.19.0**, and **npm 11.17.0**. Install a supported Python and Node.js release if those runtimes are not available on your machine.
-
-- Git (optional, for version control)
-- Windows PowerShell for the commands in this guide
-- No PostgreSQL server is required for the default SQLite development setup.
-- A Google Gemini API key is optional. Only the improvement feature requires it.
-
-## Quick start on Windows
-
-Open **two PowerShell terminals** in VS Code. Keep each server terminal open while you use the app.
-
-### 1. Start the backend
-
-In the first terminal:
-
-```powershell
-cd D:\personal_project\SmartResumeAI\backend
-.\.venv\Scripts\Activate.ps1
-python -m alembic upgrade head
-python -m uvicorn app.main:app --reload
+```bash
+docker build -t cdad .
+docker volume create cdad-data
+docker run -d -p 3000:3000 -v cdad-data:/app/backend/data --name cdad-container cdad
 ```
 
-Activation assumes the project's virtual environment already exists. If it does not, create it and install dependencies first:
+Open **http://localhost:3000**
 
-```powershell
-cd D:\personal_project\SmartResumeAI\backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+The `-v cdad-data:/app/backend/data` volume is what makes the SQLite database
+survive beyond the container itself — without it, removing the container
+(`docker rm`, not just `docker stop`) wipes all data and the next run starts
+from a fresh seed. With the volume, `docker rm` + `docker run` again reuses
+the same data (confirmed: the server logs "Already seeded" instead of
+reseeding).
+
+To stop/remove (data is preserved in the volume either way):
+
+```bash
+docker stop cdad-container && docker rm cdad-container
 ```
 
-Create `backend\.env` from the example only if the file does not already exist. Preserve your existing `.env` and secret:
+To wipe the demo data and start over, also remove the volume:
 
-```powershell
-cd D:\personal_project\SmartResumeAI\backend
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```bash
+docker volume rm cdad-data
 ```
 
-Set `JWT_SECRET` in `.env` to a private random value with at least 32 characters. To generate a value, run this from an activated backend environment:
+## Quick Start (no Docker)
 
-```powershell
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-Paste the generated value after `JWT_SECRET=` in `backend\.env`. Do not share it. The API configuration resolves this `.env` file relative to the backend source, so it can find the settings even if Uvicorn is launched from the repository root.
-
-Confirm the API is alive:
-
-- Health check: <http://127.0.0.1:8000/health>
-- Interactive API documentation: <http://127.0.0.1:8000/docs>
-
-The health check should return JSON containing `"status": "ok"`.
-
-### 2. Start the frontend
-
-In the second terminal:
-
-```powershell
-cd D:\personal_project\SmartResumeAI\frontend
+```bash
+cd backend
 npm install
-if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
-npm run dev
+npm start
 ```
 
-Open <http://localhost:5173>. Vite normally reloads code changes automatically. Stop a server with **Ctrl+C** in its terminal.
+Open **http://localhost:3000** (or set `PORT=...` before `npm start` to use a
+different port). The server seeds demo data into `backend/data/cdad.db`
+automatically on first run.
 
-## Environment configuration
+> Run the app through this Node/Express server. Opening `frontend/index.html` directly
+> or using VS Code Live Server serves only the frontend, so `/api/*` requests
+> such as login and the current-session check will return 404.
 
-### Backend: `backend\.env`
+## Login
 
-`backend\.env.example` lists the available settings. Keep actual credentials in the ignored `.env` file; never copy real values into source code or commit them.
+**Login is always by ID — never by email.** Email is stored on each record
+for reference only.
 
-| Variable | Required | Purpose |
-|---|---:|---|
-| `APP_NAME` | No | API title |
-| `ENVIRONMENT` | No | Environment label |
-| `DATABASE_URL` | No | Database connection; defaults to a local SQLite database |
-| `JWT_SECRET` | Yes for account registration/login | Private signing secret; use a random value of at least 32 characters |
-| `JWT_ALGORITHM` | No | JWT signing algorithm; default is `HS256` |
-| `JWT_EXPIRE_MINUTES` | No | Access-token lifetime; default is 60 minutes |
-| `GEMINI_API_KEY` | No | Enables AI rewriting when configured |
-| `GEMINI_MODEL` | No | Gemini model name; default is `gemini-2.5-flash` |
-| `CORS_ORIGINS` | No | Comma-separated allowed browser origins |
-| `MAX_UPLOAD_MB` | No | Upload size limit; default is 5 MB |
-| `MAX_JOB_DESCRIPTION_CHARS` | No | Intended job description character limit |
-| `MAX_RESUME_CHARS` | No | Intended resume text character limit |
+| Role    | Login ID        | Password     |
+|---------|------------------|--------------|
+| Admin   | `ADMIN001`       | `admin123`   |
+| Faculty | `FAC001`         | `faculty123` |
+| Student | Enrollment No. (e.g. `ADT24SOCB0001`) | `PASS123` (default) |
 
-The default `DATABASE_URL=sqlite:///./smartresume.db` stores the development database in the backend working directory. PostgreSQL URLs should use the Psycopg driver, for example:
+> The default admin is created automatically on first run (`backend/db.js`).
+> **Change its password** (Admin Panel → 🔑 Change Password) before sharing the app — admin passwords can't be
+> reset from the login page.
 
-```text
-postgresql+psycopg://username:password@localhost:5432/smartresume
+Faculty adds real students one at a time (Faculty → Students → **Add
+Student**) or in bulk via **Import CSV** (a file with Enrollment No. + Name
+columns, matching the roster template — Email/Phone/Group/Password columns
+are optional). Every imported student defaults to password `PASS123` unless
+the CSV specifies one.
+
+Faculty can change any student's login ID or password any time from Faculty
+→ Students → **Edit ✎**.
+
+Students and faculty can reset their own password from the login page's
+**Forgot Password?** link: enter your ID and the email on file for your
+account, solve the **image captcha**, and choose a new password. No email
+service is needed. (Admins can't use this — another admin changes their
+password in the Admin Panel.)
+
+### First login for a new student
+
+The app walks a brand-new student through setup automatically:
+
+1. **Log in** with their Student ID + password.
+2. **Complete profile** — a phone number is required before anything else
+   unlocks (a blocking modal appears until this is filled in).
+3. **Join or create a group** — every other tab is locked until the student
+   either creates a new group (they become team leader) or sends a join
+   request to an existing group's leader (found by that leader's Student ID)
+   and gets accepted.
+4. Once in a group, the rest of the dashboard opens up — My Project,
+   Progress, Submission, GitHub, Marks, Presentation, Connect, Requests,
+   Announcements, Notifications.
+
+## Feature Overview
+
+### Students
+- Full CRUD by faculty; bulk **Import CSV** with a detailed skip-reason
+  report (missing fields / duplicate IDs, listed by line number); **Export**
+  to CSV; **Delete All** (with confirmation) for clearing a bad import.
+- Search, filter by group/status, paginated table.
+- Students edit their own name/email/phone/avatar; faculty can edit
+  everything.
+
+### Groups
+- **Faculty** can create/edit/delete any group, manage members and leader.
+- **Students** can also create their own group (become leader automatically,
+  with a member picker to enroll classmates immediately), or find another
+  group's leader by their Student ID and send a join request directly to
+  them — the leader accepts/rejects from their own **Create Group** tab.
+- **Leave Group** is self-service: leadership auto-transfers to another
+  member if the leader leaves, or the group is disbanded if the last member
+  leaves.
+- Member count and progress always calculated live, never hardcoded.
+
+### Projects
+- **Faculty** can create/assign/edit any project.
+- **Students** (team leader) can also create their own group's project if
+  one doesn't exist yet, and any member can edit title/description/tools
+  used — group, leader, and deadline stay faculty-controlled.
+- 7-stage progress tracker (Planning → Requirement Analysis → Design →
+  Development → Testing → Presentation → Submission). Students click through
+  each stage themselves (Pending → In Progress → Completed) on the
+  **Progress** page; overall percentage recalculates automatically and
+  cascades up to the owning group.
+
+### Submissions
+- Dedicated **Submission** tab for students: submit a link, attach a file
+  (PDF, PPT/PPTX, CSV, or DOC/DOCX, max 10MB), and/or a note for faculty to
+  review — at least a link or a file is required, not both. Resubmit any
+  time before approval; a resubmission that doesn't attach a new file
+  keeps whatever file was already on record. Faculty can download the
+  attached file directly from the Review modal or the Submissions Hub.
+- **Faculty can request a submission** from a group, optionally with a
+  **due date/time** — this is stored on the project and shown to students
+  before they submit.
+- Every submission is **automatically tagged On Time or Late** by comparing
+  the submission timestamp to that due date (snapshotted at submit time, so
+  a later due-date edit doesn't retroactively change past submissions).
+- Faculty **Submissions Hub** — one page listing every submission across
+  every project/group, filterable by status, with the timeliness badge
+  visible at a glance and one-click Approve/Reject with feedback.
+
+### Sections (divisions)
+- Every student can have a **Section** (A, B, …) — set in Add/Edit Student,
+  by **🏫 Assign Section** (puts everyone currently listed into a section),
+  or by **🏫 Import Section** (upload one division's CSV; new students are
+  created in that section and existing ones are moved into it; a Section
+  column in the CSV narrows the import to the chosen division).
+- The faculty Students page has **section tabs** (All / Section A / Section B /
+  No Section, each with a count) and a Section column.
+
+### Exam submissions (TA1 / TA2 / End Sem)
+- Each group's **team leader** submits per exam: a link and/or **up to 5
+  files** (PDF, PPT/PPTX, CSV, DOC/DOCX, max 10MB each). Updating a
+  submission keeps existing files unless they are unticked.
+- Faculty see them under **Submissions → Exam Submissions** (tabs per exam,
+  "Not submitted" shown for groups that haven't). PDF, CSV and DOCX files
+  can be **viewed in the browser without downloading**; PPT/PPTX/DOC can only
+  be downloaded (browsers can't render them).
+- Faculty set a **deadline per exam**. After it passes the server rejects
+  submissions (students see "Closed"); setting a later date reopens it.
+
+### Admin panel
+- Log in as Admin → `admin.html`: add / edit / delete **students and
+  faculty**, bulk-import students from CSV, and see headline counts.
+- Admins also have **full faculty access** — the "Faculty Dashboard" link
+  opens the normal faculty dashboard (groups, projects, marks, submissions,
+  requests, announcements…). Server-side, `requireRole('faculty')` also
+  accepts admin sessions.
+
+### Marks, Presentations, GitHub
+- Faculty edits marks (Internal/Project/Presentation/Viva); Total, %, and
+  Grade are always derived, never stored directly.
+- Faculty Marks page: **section filter** (rows grouped per section with the
+  average), **search by enrollment no.**, and **+ Add Group Marks** — enter
+  marks once for a group and they are written to every member (blank fields
+  keep each member's existing mark).
+- **Marks are hidden from students until released.** Use **📢 Release All
+  Marks** or the 🔒/🔓 icon per student. Once released, a student sees their
+  own marks and a **Group Marks** card with their group members' marks
+  (the API only returns the student's own group, never other groups).
+- Students view marks with a donut chart (overall %) and a trend line chart
+  across the four components.
+- Presentations scheduled/edited/rescheduled/cancelled/completed by faculty;
+  students view their own group's schedule.
+- GitHub repo name/URL/branch editable by students (both when creating a
+  project and afterward) and by faculty.
+
+### Requests & connections
+- **Academic requests** (Join/Leave/Change Group, Project, General) — student
+  submits to faculty, faculty accepts/rejects with a response note.
+- **Peer connection requests** — any student can browse the student
+  directory and send another student a connection request; accepted
+  connections show up for both, and a connected student who leads a group
+  with an open slot can invite them directly.
+- **Group join requests** — separate from the above; a student without a
+  group finds a leader by ID and requests to join their specific group.
+- Faculty gets read-only oversight monitors for both peer and group-join
+  requests on the Requests page.
+
+### Notifications & announcements
+- Faculty creates/edits/deletes notifications targeted at all students, a
+  specific group, or a specific student; students view/mark read/delete.
+- Announcements (Normal/Important/Urgent priority) — faculty CRUD, students
+  view.
+- Every significant action (request accepted, submission reviewed,
+  presentation scheduled, etc.) automatically fires a notification to the
+  right person.
+
+### Dashboards
+- Every number on every dashboard card and chart — student counts, group
+  progress, project status breakdown, marks, everything — is computed live
+  from the server, via real SQL joins (e.g. a group's progress is read
+  straight off its linked project — there's no stored mirror to desync).
+  Nothing is hardcoded.
+- Live sync: the page polls the server every 15 seconds and on tab focus, so
+  changes made elsewhere (e.g. a classmate accepting your connection
+  request) show up without a manual reload. If a session is invalidated
+  elsewhere (e.g. a reseed or logout), the next poll redirects to login
+  instead of breaking.
+
+### Activity log
+- Every create/update/delete action across the whole app is logged with a
+  timestamp. Faculty can view or clear the full history.
+
+## Tests
+
+```bash
+cd backend
+npm test
 ```
 
-If a database password contains reserved URL characters, URL-encode them in the connection string.
+Runs the API smoke tests in `backend/test/` (Node's built-in test runner, Node 22.5+). They boot the real server on a random port with a temporary data directory (`CDAD_DATA_DIR`), so your live `backend/data/` is never touched. Covered: login per role, 401s, role boundaries, uploads (type/size/team-leader rules), review validation, mark release, exam deadlines, captcha, logout.
 
-### Frontend: `frontend\.env.local`
+## Database
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `VITE_API_URL` | `http://127.0.0.1:8000` | Public base URL used by the browser to call the API |
+SQLite tables (`backend/db.js`): `admins`, `faculty`, `students`
+(has `section`), `student_groups`, `projects`, `submissions`, `marks`
+(has `released`), `exam_submissions`, `exam_submission_files`,
+`exam_deadlines`, `presentations`, `requests`,
+`group_join_requests`, `student_requests`, `student_connections`,
+`notifications`, `announcements`, `activity`, `seed_meta`. Real foreign keys
+replace what used to be hand-synced LocalStorage arrays — e.g. group
+membership is `students.group_id`, not a `members[]` array kept in sync by
+hand; group progress is read live off the linked project, never stored
+independently.
 
-Anything with a `VITE_` prefix is bundled for browser access. Never put passwords, JWT secrets, database URLs, or Gemini keys in frontend environment variables.
+The REST API (`backend/routes/*.js`) reconstructs the same JSON shapes the
+frontend has always used (`group.members`, `project.progress`, etc.) from
+these normalized tables via joins, so `frontend/js/storage.js`'s six helpers
+(`getData`, `saveData`, `addData`, `updateData`, `deleteData`, `findData`)
+still look the same to every other frontend file — they just `fetch()` the
+API now instead of reading `localStorage`.
 
-## First run checklist
-
-1. Confirm `backend\.env` exists and has a private `JWT_SECRET` of 32 or more characters.
-2. Confirm you started the backend and see Uvicorn's “running on” message.
-3. Open `/health` and verify `"status": "ok"`.
-4. Confirm Alembic migrations completed without an error.
-5. Start Vite and open <http://localhost:5173>.
-6. Create an account with a valid email address and a password of at least 10 characters.
-7. Create a resume from the builder or upload a PDF/DOCX.
-8. Use **Save and analyze** or the upload-review flow.
-9. Select a saved resume and paste a complete job description on the job-match screen.
-10. Optionally add a Gemini key to try AI rewrite suggestions.
-
-## How to use the application
-
-### Create an account or log in
-
-Register with a name, valid email, and a password of 10–128 characters. Use the show-password checkbox if you need to verify your entry. The account screens keep the short-lived access token in browser `sessionStorage`.
-
-### Build a resume
-
-1. Open **Create Resume**.
-2. Fill in contact details, summary, skills, experience, education, and projects.
-3. Check the live preview and select the Classic or Modern template.
-4. Select **Save resume** to store a draft, or **Save and analyze** to also save a resume checklist analysis.
-5. Choose **Export PDF** or **Print / save PDF**, then select **Save as PDF** in the browser print dialog.
-
-Experience, education, and projects accept plain text; use separate lines to make entries readable. The current editor is intentionally simple and does not provide a separate form row for each employer or degree.
-
-### Upload and analyze a resume
-
-1. Open **Analyze Resume**.
-2. Select a text-based PDF or DOCX up to 5 MB.
-3. Review the extracted text and fields; correct parsing mistakes before saving.
-4. Select **Save and analyze**.
-5. Review the score breakdown and recommendations.
-
-The upload itself is processed in memory and discarded. If you choose to save it, the extracted resume text and structured fields are stored in the account database.
-
-### Compare a resume to a job
-
-1. Save a resume first.
-2. Open **Job Match** and choose the resume.
-3. Paste at least 100 characters from the role description (maximum 12,000).
-4. Review the ATS-style estimate, its rubric, recognized matching terms, and missing terms.
-5. Treat missing skills as possible learning goals, not details to claim unless they are true.
-
-The current keyword vocabulary is finite and primarily English. A keyword match only means text was found, not that the applicant has the skill or experience.
-
-### Improve wording with AI
-
-1. Configure `GEMINI_API_KEY` in `backend\.env`, then restart the backend.
-2. Open **Improve**, choose a saved resume, and paste the exact bullet or summary to review.
-3. Inspect the original and suggested wording side by side.
-4. Edit the suggestion if needed, then accept, save your edit, reject, or regenerate.
-
-When accepted text exactly matches content in the saved resume, that text is replaced there. Otherwise, the action is recorded but the suggestion is not inserted into a resume. Verify that every AI-suggested fact is accurate.
-
-### View and delete saved data
-
-- **Dashboard** shows resume and analysis counts, recent resumes, and recent analysis entries.
-- **History** displays saved resumes and the full analysis breakdown; it can delete a resume or analysis.
-- Deleting a resume also deletes analyses, matches, and rewrite suggestions associated with it.
-- **Profile and settings** allows changing the account display name.
-
-## How the ATS-style estimate works
-
-### The important distinction
-
-There is **no single universal ATS score**. ATS vendors use different products, parsers, configurations, and proprietary ranking logic. SmartResumeAI does not connect to Workday, Greenhouse, Lever, or another vendor and cannot return that vendor’s official score.
-
-The app instead calculates a **transparent, ATS-style job-fit estimate out of 100** for a saved resume and the job description entered by the user. It is an educational heuristic, not a prediction of interviews, screening outcomes, or hiring decisions.
-
-### Scoring rubric
-
-| Category | Base weight | What is compared |
-|---|---:|---|
-| Required skill coverage | 55 points | Recognized technical and transferable skills not identified as preferred |
-| Preferred skill coverage | 15 points | Recognized skills near preference wording such as “preferred,” “bonus,” or “nice to have” |
-| Relevant keyword coverage | 20 points | Recognized role, domain, and qualification terms from an expanded built-in vocabulary |
-| Resume section readability | 10 points | Presence of common contact, summary, skills, experience, and education/project sections |
-
-If no terms are found in a category, its base weight is redistributed proportionally across categories that can be assessed. This makes the available category maximums sum to 100. The response includes each category’s score, maximum, and explanation; category scores add up to the displayed total.
-
-### What a match means
-
-- Matching is based on normalized phrase/word boundaries, common separators, and simple plural handling.
-- The entire saved text (structured fields and extracted text) is searched.
-- A listed skill or keyword is a text-presence signal. The current version does not use a semantic model to judge context, recency, proficiency, or evidence.
-- It does not evaluate visual layout, PDF reading order, columns, tables, graphics, or vendor-specific parsers.
-- Unsupported terms may not be recognized. Scores may differ from scores produced by real employers’ ATS configurations.
-- Never add a keyword, achievement, metric, qualification, or skill to a resume unless it accurately describes you.
-
-### Improving the project for a major-project evaluation
-
-To make the score more defensible as a research/engineering feature:
-
-1. Document this rubric and add unit tests for every category and edge case.
-2. Version each rubric so historical scores remain explainable after changes.
-3. Build a labeled evaluation set of sample resumes and job descriptions, and report precision/recall or ranking agreement—do not claim vendor equivalence without authorized comparative data.
-4. Add synonym and phrase normalization with an auditable mapping, rather than silently expanding the vocabulary.
-5. Separate parser-quality, formatting, skills, and job-relevance signals in the UI.
-6. Evaluate against real ATS vendor behaviour only when the vendor authorizes access and provides a documented API or test procedure.
-
-## Backend API reference
-
-All protected routes require:
+## File Structure
 
 ```text
-Authorization: Bearer <access_token>
-```
-
-FastAPI validates request and response data and exposes interactive examples at `/docs`.
-
-| Method | Path | Purpose | Authentication |
-|---|---|---|---|
-| `GET` | `/health` | Service health check | No |
-| `POST` | `/auth/register` | Register and receive an access token | No |
-| `POST` | `/auth/login` | Sign in and receive an access token | No |
-| `GET` | `/auth/me` | Read current user profile | Yes |
-| `PATCH` | `/auth/me` | Update profile name | Yes |
-| `POST` | `/resumes/parse` | Parse PDF/DOCX in memory for review | Yes |
-| `GET` | `/resumes` | List current user’s resumes | Yes |
-| `POST` | `/resumes` | Save a resume | Yes |
-| `GET` | `/resumes/{resume_id}` | Get an owned resume | Yes |
-| `PUT` | `/resumes/{resume_id}` | Update an owned resume | Yes |
-| `DELETE` | `/resumes/{resume_id}` | Delete an owned resume and related data | Yes |
-| `POST` | `/resumes/{resume_id}/analyze` | Create and save a rule-based resume analysis | Yes |
-| `GET` | `/analyses` | List current user’s analyses | Yes |
-| `GET` | `/analyses/{analysis_id}` | Get an owned analysis | Yes |
-| `DELETE` | `/analyses/{analysis_id}` | Delete an owned analysis | Yes |
-| `POST` | `/matches` | Calculate and save ATS-style job fit | Yes |
-| `POST` | `/resumes/{resume_id}/improvements` | Request and save a Gemini rewrite suggestion | Yes |
-| `PATCH` | `/improvements/{suggestion_id}` | Accept, edit, or reject an owned suggestion | Yes |
-| `GET` | `/dashboard` | Get current user's dashboard summary | Yes |
-| `GET` | `/history` | Get current user's saved resumes and analyses | Yes |
-
-Resume JSON uses a `title`, a `content` object (contact details, summary, skills, experience, education, projects), and optional `raw_text`. Use Swagger UI at <http://127.0.0.1:8000/docs> to inspect exact request and response shapes.
-
-## Project structure
-
-```text
-SmartResumeAI/
+CBAD-project/
+├── .dockerignore
+├── .env.example
 ├── .gitignore
+├── BACKEND.md
+├── DEPLOY.md
+├── Dockerfile
 ├── README.md
-├── .vscode/
-│   ├── extensions.json
-│   └── settings.json
-├── backend/
-│   ├── .env.example
-│   ├── alembic.ini
-│   ├── requirements.txt
-│   ├── migrations/
-│   │   ├── env.py
-│   │   └── versions/
-│   ├── app/
-│   │   ├── core/       # Configuration, auth dependencies, password/JWT helpers
-│   │   ├── db/         # SQLAlchemy base, engine, database sessions
-│   │   ├── models/     # Users, resumes, analyses, matches, suggestions
-│   │   ├── routers/    # HTTP endpoints
-│   │   ├── schemas/    # Pydantic request/response validation
-│   │   └── services/   # Parsing, scoring, matching, AI provider
-│   └── tests/
-└── frontend/
-    ├── .env.example
-    ├── package.json
-    └── src/
-        ├── components/ # Shared navigation, access checks, form feedback, UI
-        ├── context/    # Browser session authentication state
-        ├── layouts/
-        ├── pages/      # Landing, account, dashboard, resume workflows
-        ├── services/   # API client
-        └── utils/
+├── docker-compose.yml
+├── render.yaml
+├── frontend/
+│   ├── admin.html, faculty.html, group-details.html, index.html, student.html
+│   ├── favicon.svg
+│   ├── css/
+│   └── js/
+└── backend/
+    ├── package.json, package-lock.json
+    ├── index.js, db.js, seed.js, sessions.js, and other server modules
+    ├── routes/
+    ├── test/
+    └── data/ (local database and uploads; gitignored)
 ```
 
-## Database and migrations
+The frontend is static HTML/CSS/JavaScript with no separate build step. The
+backend serves it and the `/api/*` endpoints from the same origin.
 
-The default SQLite database is created locally and ignored by Git. Schema changes are tracked in Alembic migrations.
+To put it online with Docker (and optionally keep uploaded files in Appwrite),
+see [DEPLOY.md](DEPLOY.md).
 
-From `D:\personal_project\SmartResumeAI\backend` with the virtual environment active:
+The full backend reference (roles, every endpoint, rules the server enforces)
+is in [BACKEND.md](BACKEND.md#backend-reference-for-contributors).
 
-```powershell
-python -m alembic current
-python -m alembic history
-python -m alembic upgrade head
+## Resetting the Demo Data
+
+The seed re-runs automatically whenever `SEED_VERSION` in `backend/seed.js` is
+bumped to a new string — this is how roster changes propagate to everyone
+without needing a manual reset.
+
+**Without Docker** — stop the server and delete the database file:
+
+```bash
+rm backend/data/cdad.db backend/data/cdad.db-shm backend/data/cdad.db-wal
+npm --prefix backend start
 ```
 
-Create a migration after changing SQLAlchemy models:
+**With Docker** — remove the volume instead (the file lives inside it, not
+on the host):
 
-```powershell
-python -m alembic revision --autogenerate -m "describe the schema change"
+```bash
+docker rm -f cdad-container
+docker volume rm cdad-data
+docker run -d -p 3000:3000 -v cdad-data:/app/backend/data --name cdad-container cdad
 ```
-
-Review the generated migration before applying it with `python -m alembic upgrade head`. Do not delete the database to work around migration errors; inspect the error and migration state first.
-
-## Tests and quality checks
-
-### Backend
-
-From the `backend` folder:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m pip check
-```
-
-The tests cover health, registration/login, duplicate accounts, protected access, owner isolation, resume analysis, matching and rubric arithmetic, DOCX parsing, upload validation, and safe behaviour when Gemini is not configured.
-
-### Frontend
-
-From the `frontend` folder:
-
-```powershell
-npm run lint
-npm run build
-```
-
-The project currently provides lint/build checks but does not yet have a separate automated frontend component test suite.
-
-## Security and privacy
-
-- Passwords are stored as Argon2 hashes, not plaintext.
-- Access tokens are short-lived JWTs. The browser stores a token in `sessionStorage` and removes it on logout.
-- Session storage reduces persistence compared with local storage, but same-origin script execution/XSS can still expose a token. Use HTTPS in production and prevent injection bugs.
-- Backend routes scope resumes, analyses, and suggestions to the authenticated owner; another user's record returns not found.
-- Uploads are allow-listed by extension/signature, limited in size, and parsed in memory. Uploaded file bytes are discarded after parsing.
-- Resume text you choose to save is persisted in the configured database.
-- When Gemini rewriting is configured and used, submitted text is sent to Google's Gemini service. Review the provider's current data terms before using real personal data.
-- CORS is configured with an origin allow-list. Production must list the actual frontend URL.
-- Keep `backend\.env` private. Never publish `.env` files, API keys, database passwords, JWT secrets, or real resume data.
-- Rotate a secret if it has been exposed. Do not copy secret values into bug reports, screenshots, source code, or chat messages.
-
-## Troubleshooting
-
-### `JWT_SECRET must be configured with at least 32 characters`
-
-1. Confirm `D:\personal_project\SmartResumeAI\backend\.env` exists (the name must be `.env`, not `.env.txt`).
-2. Set `JWT_SECRET` to a private value of 32 or more characters. Generate one with:
-
-   ```powershell
-   cd D:\personal_project\SmartResumeAI\backend
-   .\.venv\Scripts\Activate.ps1
-   python -c "import secrets; print(secrets.token_urlsafe(48))"
-   ```
-
-3. Save `.env`, stop Uvicorn with **Ctrl+C**, then restart it.
-4. Do not paste the secret into chat or commit it.
-
-### `Could not connect to the API`
-
-- Check the backend terminal is still running.
-- Visit <http://127.0.0.1:8000/health>.
-- Confirm `VITE_API_URL` in `frontend\.env.local` is correct.
-- Restart Vite after changing `.env.local`.
-
-### CORS error in the browser
-
-- Check `CORS_ORIGINS` in `backend\.env` includes the exact frontend origin, such as `http://localhost:5173`.
-- Protocol, hostname, and port must match. `localhost` and `127.0.0.1` are different origins.
-- Restart the backend after changing the setting.
-
-### Registration returns 422 or 409
-
-- Use a syntactically valid email address.
-- Password must be at least 10 characters and no more than 128.
-- 409 means the email is already registered; use the login screen or another email.
-- Check that migrations have run successfully.
-
-### Resume upload says the file is unreadable
-
-- Confirm the document is a genuine PDF or DOCX and is no larger than 5 MB.
-- Image-only/scanned PDFs have no extractable text; use a text-based document.
-- The parser does not perform OCR and extraction may need manual corrections.
-
-### AI improvement says it is unavailable
-
-- Add a valid `GEMINI_API_KEY` to `backend\.env`.
-- Restart the backend.
-- Check that the selected Gemini model is available to your API account and that quota/network access is available.
-- Do not add the key to frontend environment files.
-
-### PowerShell refuses to activate `.venv`
-
-Use the virtual-environment interpreter directly instead:
-
-```powershell
-cd D:\personal_project\SmartResumeAI\backend
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-If your machine permits scripts and you choose to change the policy, follow your organization's Windows security guidance.
-
-## Known limitations and roadmap
-
-Current limitations:
-
-- **No official ATS integration or official vendor score.** Current job matching is a rule-based estimate.
-- Skill/role keyword vocabulary is finite. Synonyms, context, nuanced qualifications, and different languages are not comprehensively interpreted.
-- Presence of a word is not proof of proficiency or evidence that a resume meets a requirement.
-- Section readability is a rough signal; actual parser compatibility and layout are not inspected.
-- PDF/DOCX parsing does not support OCR for scanned image documents.
-- AI rewriting requires a Gemini API key and a working provider account/quota.
-- PDF export relies on browser print-to-PDF rather than a dedicated server PDF renderer.
-- No password reset, account deletion, refresh token, or login rate-limiting workflow.
-- Deployment is not included or verified. It requires hosting, production configuration, and a production database.
-
-Possible future work:
-
-- Add versioned scoring rubrics, qualification extraction, phrase/synonym handling, and contextual evidence matching.
-- Create an anonymized and labeled evaluation dataset; report reproducible metrics and limitations.
-- Add automated frontend tests and accessibility/browser tests.
-- Add email verification, password reset, account deletion, and rate limits.
-- Add OCR and a dedicated PDF export pipeline.
-- Add a documented, authorized ATS-vendor integration only if a vendor provides suitable API access.
-
-## More manuals
-
-- [Backend setup and API guide](./backend/README.md)
-- [Frontend development and UI guide](./frontend/README.md)
+#
